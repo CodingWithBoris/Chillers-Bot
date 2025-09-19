@@ -1,0 +1,1214 @@
+Data:
+    config.json
+src:
+    base:
+        classes:
+            Command.ts
+                import { ChatInputCommandInteraction, AutocompleteInteraction, CacheType } from "discord.js";
+import Category from "../enums/Category";
+import ICommand from "../interfaces/ICommand";
+import CustomClient from "./CustomClient";
+import ICommandOptions from "../interfaces/ICommandOptions";
+
+export default class Command implements ICommand{
+    client: CustomClient;
+    name: string;
+    description: string;
+    category: Category;
+    default_member_permissions: bigint;
+    dm_permission: boolean;
+    cooldown: number;
+    options: object;
+    
+    constructor(client: CustomClient, options: ICommandOptions) {
+        this.client = client;
+        this.name = options.name;
+        this.description = options.description;
+        this.category = options.category;
+        this.default_member_permissions = options.default_member_permissions;
+        this.dm_permission = options.dm_permission;
+        this.cooldown = options.cooldown;
+        this.options = options.options;
+    }
+    
+    
+    Execute(interaction: ChatInputCommandInteraction<CacheType>): void {
+    }
+    AutoComplete(interaction: AutocompleteInteraction<CacheType>): void {
+    }
+
+}
+            CustomClient.ts
+                import { Client, Collection, GatewayIntentBits, Partials } from "discord.js";
+import IConfig from "../interfaces/IConfig";
+import Handler from "./Handler";
+import Command from "./Command";
+import SubCommand from "./SubCommand";
+import mongoose from "mongoose";
+
+export default class CustomClient extends Client {
+  handler: Handler;
+  config: IConfig;
+  commands: Collection<string, Command>;
+  subCommands: Collection<string, SubCommand>;
+  cooldowns: Collection<string, Collection<string, number>>;
+  developerMode: boolean;
+
+  constructor() {
+    super({
+      intents: [
+        GatewayIntentBits.Guilds,                   // Needed for slash commands and most guild-level data
+        GatewayIntentBits.GuildMembers,             // Needed to receive member updates (like role or nickname changes)
+        GatewayIntentBits.GuildPresences,           // Optional, only needed if you're doing presence-based logic (not in your code)
+        GatewayIntentBits.GuildMessages,            // Only needed if your bot handles message-based commands (not shown here)
+        GatewayIntentBits.MessageContent,
+      ],
+    });
+
+    this.config = require(`${process.cwd()}/data/config.json`);
+    this.handler = new Handler(this);
+    this.commands = new Collection();
+    this.subCommands = new Collection();
+    this.cooldowns = new Collection();
+    this.developerMode = process.argv.includes("development");
+  }
+
+public async Init(): Promise<void> {
+    this.LoadHandlers();
+    await mongoose.connect(this.config.mongoURI)
+        .then(() => console.log("Connected to MongoDB"))
+        .catch((err) => console.error("Failed to connect to MongoDB:", err));
+    this.login(this.config.token).catch(console.error);
+}
+
+  private LoadHandlers(): void {
+    this.handler.LoadEvents();
+    this.handler.LoadCommands();
+  }
+}
+
+            Event.ts
+                import { Events } from "discord.js";
+import IEvent from "../interfaces/IEvent";
+import CustomClient from "./CustomClient";
+import IEventOptions from "../interfaces/IEventOptions";
+
+export default class Event implements IEvent{
+    client: CustomClient;
+    name: Events;
+    description: string;
+    once: boolean;
+
+    constructor(client: CustomClient, options: IEventOptions){
+        this.client = client;
+        this.name = options.name;
+        this.description = options.description;
+        this.once = options.once;
+    }
+
+    Execute(...args: any): void {
+    }
+}
+            Handler.ts
+                import { glob } from "glob";
+import IHandler from "../interfaces/IHandler";
+import path from "path";
+import CustomClient from "./CustomClient";
+import Event from "./Event";
+import Command from "./Command";
+import SubCommand from "./SubCommand";
+
+export default class Handler implements IHandler {
+  client: CustomClient;
+  constructor(client: CustomClient) {
+    this.client = client;
+  }
+  async LoadEvents() {
+    const files = (await glob(`build/events/**/*.js`)).map((filePath) =>
+      path.resolve(filePath)
+    );
+
+    files.map(async (file: string) => {
+      const event: Event = new (await import(file)).default(this.client);
+
+      if (!event.name)
+        return (
+          delete require.cache[require.resolve(file)] &&
+          console.log(`${file.split("/").pop()} does not have name.`)
+        );
+
+      const execute = (...args: any) => event.Execute(...args);
+
+      // @ts-ignore
+      if (event.once) this.client.once(event.name, execute);
+      // @ts-ignore
+      else this.client.on(event.name, execute);
+
+      return delete require.cache[require.resolve(file)];
+    });
+  }
+  async LoadCommands() {
+    const files = (await glob(`build/commands/**/*.js`)).map((filePath) =>
+      path.resolve(filePath)
+    );
+
+    files.map(async (file: string) => {
+      const command: Command | SubCommand = new (await import(file)).default(
+        this.client
+      );
+
+      if (!command.name)
+        return (
+          delete require.cache[require.resolve(file)] &&
+          console.log(`${file.split("/").pop()} does not have name.`)
+        );
+
+      if (file.split("/").pop()?.split(".")[2])
+        return this.client.subCommands.set(command.name, command);
+
+      this.client.commands.set(command.name, command as Command);
+
+      return delete require.cache[require.resolve(file)];
+    });
+  }
+}
+
+            SubCommand.ts
+                import { CacheType, ChatInputCommandInteraction } from "discord.js";
+import ISubCommand from "../interfaces/ISubCommand";
+import CustomClient from "./CustomClient";
+import ISubCommandOptions from "../interfaces/ISubCommandOptions";
+
+export default class SubCommand implements ISubCommand{
+    client: CustomClient;
+    name: string;
+
+
+    constructor(client: CustomClient, options: ISubCommandOptions) {
+        this.client = client;
+        this.name = options.name;
+    }
+
+    Execute(interaction: ChatInputCommandInteraction<CacheType>): void {
+    }
+
+}
+        enums:
+            Category.ts
+                enum Category {
+    Utilities = "Utilities",
+    Moderation = "Moderation",
+}
+
+export default Category;
+        interfaces:
+            ICommand.ts
+                import { AutocompleteInteraction, ChatInputCommandInteraction } from "discord.js";
+import CustomClient from "../classes/CustomClient";
+import Category from "../enums/Category";
+
+export default interface ICommand {
+    client: CustomClient;
+    name: string;
+    description: string;
+    category: Category;
+    options: object;
+    default_member_permissions: bigint;
+    dm_permission: boolean;
+    cooldown: number;
+
+    Execute(interaction: ChatInputCommandInteraction): void;
+    AutoComplete(interaction: AutocompleteInteraction): void;
+}
+            ICommandOptions.ts
+                import Category from "../enums/Category";
+
+export default interface ICommandOptions {
+    name: string;
+    description: string;
+    category: Category;
+    options: object;
+    default_member_permissions: bigint;
+    dm_permission: boolean;
+    cooldown: number;
+}
+            IConfig.ts
+                export default interface IConfig{
+    token: string;
+    clientId: string;
+    guildId: string;
+
+    mongoURI: string;
+    moderationChannelId: string;
+    muteRoleId: string;
+    warningReasons: string[];
+
+    RankOrder: string[];
+    RankSystem: Record<string, string>;
+
+    Moderation: {
+    Channels: {
+      internalCase: string;
+      punishmentLogs: string;
+    };
+  };
+}
+            ICustomClient.ts
+                import { Collection } from "discord.js";
+import Command from "../classes/Command";
+import IConfig from "./IConfig";
+import SubCommand from "../classes/SubCommand";
+
+export default interface ICustomClient {
+    config: IConfig;
+    commands: Collection<string, Command>;
+    subCommands: Collection<string, SubCommand>;
+    cooldowns: Collection<string, Collection<string, number>>;
+    developerMode: boolean;
+
+    Init():void;
+    LoadHandlers(): void;
+}
+            IEvent.ts
+                import { Events } from "discord.js";
+import CustomClient from "../classes/CustomClient";
+
+export default interface IEvent {
+    client: CustomClient;
+    name: Events;
+    description: string;
+    once: boolean;
+}
+            IEventOptions.ts
+                import { Events } from "discord.js";
+
+export default interface IEventOptions {
+    name: Events;
+    description: string;
+    once: boolean;
+}
+            IHandler.ts
+                export default interface IHandler {
+    LoadEvents(): void;
+    LoadCommands(): void;
+}
+            ISubCommand.ts
+                import { ChatInputCommandInteraction } from "discord.js";
+import CustomClient from "../classes/CustomClient";
+
+export default interface ISubCommand {
+    client: CustomClient;
+    name: string;
+
+    Execute(interaction: ChatInputCommandInteraction): void
+}
+            ISubCommandOptions.ts
+                export default interface ISubCommandOptions {
+    name: string;
+}
+        schema:
+            UserModeration.ts
+                // src/base/schema/UserModeration.ts
+import { Schema, model, Document } from "mongoose";
+
+export interface IWarning {
+  count: number;
+  dates: Date[];
+  mods: string[];
+}
+
+export interface IPunishment {
+  type: string;      // e.g. "mute", "ban", "timeout", "kick"
+  reason: string;
+  duration?: string;
+  modId: string;
+  date: Date;
+}
+
+export interface IUserModeration extends Document {
+  userId: string;
+  guildId: string;
+  threadId?: string;
+  profileMessageId?: string;
+  notes: string;
+  warnings: Map<string, IWarning>;
+  punishments: IPunishment[];
+}
+
+const WarningSchema = new Schema(
+  {
+    count: Number,
+    dates: [Date],
+    mods: [String],
+  },
+  { _id: false }
+);
+
+// Important: define a subdocument schema for punishments and make `type` explicit
+const PunishmentSchema = new Schema(
+  {
+    // 'type' field is declared as an object with key 'type' to avoid Mongoose shorthand
+    type: { type: String, required: true },
+    reason: { type: String, required: true },
+    duration: { type: String },
+    modId: { type: String, required: true },
+    date: { type: Date, required: true },
+  },
+  { _id: false }
+);
+
+const schema = new Schema<IUserModeration>(
+  {
+    userId: { type: String, required: true },
+    guildId: { type: String, required: true },
+    threadId: String,
+    profileMessageId: String,
+    notes: String,
+    warnings: {
+      type: Map,
+      of: WarningSchema,
+      default: {},
+    },
+    punishments: { type: [PunishmentSchema], default: [] },
+  },
+  { timestamps: true }
+);
+
+export default model<IUserModeration>("UserModeration", schema);
+
+    commands:
+        moderations:
+            note.ts
+                import {
+  ApplicationCommandOptionType,
+  PermissionFlagsBits,
+  ChatInputCommandInteraction,
+  GuildMember,
+  EmbedBuilder,
+  TextChannel,
+} from "discord.js";
+import Command from "../../base/classes/Command";
+import CustomClient from "../../base/classes/CustomClient";
+import Category from "../../base/enums/Category";
+
+export default class Timeout extends Command {
+  constructor(client: CustomClient) {
+    super(client, {
+      name: "timeout",
+      description: "Temporarily timeout a user for a specified duration (e.g. 1d, 2h, 30m, 10s).",
+      category: Category.Utilities,
+      default_member_permissions: PermissionFlagsBits.ModerateMembers,
+      dm_permission: false,
+      cooldown: 0,
+      options: [
+        {
+          name: "user",
+          description: "Which user do you want to timeout?",
+          type: ApplicationCommandOptionType.User,
+          required: true,
+        },
+        {
+          name: "reason",
+          description: "Select the rule being broken",
+          type: ApplicationCommandOptionType.String,
+          required: true,
+          choices: client.config.warningReasons.map(r => ({ name: r, value: r })),
+        },
+        {
+          name: "duration",
+          description: "How long to timeout (format: 1d, 1h, 1m, or 1s)?",
+          type: ApplicationCommandOptionType.String,
+          required: true,
+        },
+      ],
+    });
+  }
+
+  public async Execute(interaction: ChatInputCommandInteraction): Promise<void> {
+    await interaction.deferReply({ ephemeral: true });
+
+    const targetUser = interaction.options.getUser("user", true);
+    const member = interaction.guild?.members.cache.get(targetUser.id) as GuildMember | undefined;
+
+    if (!member) {
+      await interaction.editReply({ content: "❌ Unable to find that user in this server." });
+      return;
+    }
+
+    const executorMember = interaction.member as GuildMember;
+    if (member.id === executorMember.id) {
+      await interaction.editReply({ content: "❌ You cannot timeout yourself." });
+      return;
+    }
+
+    if (member.roles.highest.position >= executorMember.roles.highest.position) {
+      await interaction.editReply({ content: "❌ You cannot timeout someone with an equal or higher role." });
+      return;
+    }
+
+    if (!member.moderatable) {
+      await interaction.editReply({ content: "❌ I do not have permission to timeout that user." });
+      return;
+    }
+
+    const reason = interaction.options.getString("reason", true);
+    const durationInput = interaction.options.getString("duration", true).trim();
+
+    const match = durationInput.match(/^(\d+)([dhms])$/i);
+    if (!match) {
+      await interaction.editReply({
+        content: "❌ Invalid duration format. Use e.g. `1d` (days), `1h` (hours), `30m` (minutes), or `10s` (seconds).",
+      });
+      return;
+    }
+
+    const quantity = parseInt(match[1], 10);
+    const unit = match[2].toLowerCase();
+    let durationMs: number;
+
+    switch (unit) {
+      case "d":
+        durationMs = quantity * 24 * 60 * 60 * 1000;
+        break;
+      case "h":
+        durationMs = quantity * 60 * 60 * 1000;
+        break;
+      case "m":
+        durationMs = quantity * 60 * 1000;
+        break;
+      case "s":
+        durationMs = quantity * 1000;
+        break;
+      default:
+        await interaction.editReply({ content: "❌ Invalid time unit. Use `d`, `h`, `m`, or `s`." });
+        return;
+    }
+
+    try {
+      await member.timeout(durationMs, `Timeout by ${interaction.user.tag} — Reason: ${reason}`);
+
+      const now = new Date();
+      const unixTimestamp = Math.floor(now.getTime() / 1000);
+
+      const confirmEmbed = new EmbedBuilder()
+        .setTitle("User Timed Out")
+        .setColor(0xffa500)
+        .setDescription(`🔇 <@${member.id}> has been timed out.`)
+        .addFields(
+          { name: "Moderator", value: `<@${interaction.user.id}>`, inline: true },
+          { name: "Duration", value: `${quantity}${unit} (${durationMs / 1000}s)`, inline: true },
+          { name: "Reason", value: reason, inline: false }
+        )
+        .setTimestamp();
+
+      await interaction.editReply({ embeds: [confirmEmbed] });
+
+      // Log to punishment channels
+      const logChannelIds = this.client.config.Moderation.Channels.punishmentLogs;
+      const logMessage = `# 🔇 **Timeout Issued**
+User: ${targetUser.tag} (${targetUser.id})
+By: ${interaction.user.tag}
+Reason: **${reason}**
+Duration: **${quantity}${unit}**
+At: <t:${unixTimestamp}:F>`;
+
+      if (Array.isArray(logChannelIds)) {
+        for (const channelId of logChannelIds) {
+          try {
+            const chan = await interaction.guild?.channels.fetch(channelId);
+            if (chan && (chan as TextChannel).isTextBased()) {
+              await (chan as TextChannel).send({ content: logMessage });
+            }
+          } catch (e) {
+            console.error(`[TIMEOUT] Failed to log to punishment channel ${channelId}:`, e);
+          }
+        }
+      } else {
+        try {
+          const chan = await interaction.guild?.channels.fetch(logChannelIds);
+          if (chan && (chan as TextChannel).isTextBased()) {
+            await (chan as TextChannel).send({ content: logMessage });
+          }
+        } catch (e) {
+          console.error("[TIMEOUT] Failed to log timeout:", e);
+        }
+      }
+
+      // DM target if possible
+      try {
+        await targetUser.send(
+          `🔇 You have been timed out in **${interaction.guild?.name}** for **${quantity}${unit}** due to: **${reason}**.`
+        );
+      } catch {
+        console.warn(`Could not DM timeout notice to ${targetUser.tag}`);
+      }
+    } catch (err) {
+      console.error("Error timing out member:", err);
+      await interaction.editReply({ content: "❌ An error occurred while attempting to timeout that user." });
+      return;
+    }
+  }
+}
+
+            warn.ts
+                import { ApplicationCommandOptionType, ChatInputCommandInteraction, PermissionFlagsBits } from "discord.js";
+import Command from "../../base/classes/Command";
+import Category from "../../base/enums/Category";
+import CustomClient from "../../base/classes/CustomClient";
+import UserModeration, { IWarning } from "../../base/schema/UserModeration";
+import { buildProfileEmbed, getOrCreateThread } from "../../utils/moderationUtils";
+import { EmbedBuilder } from "discord.js";
+
+export default class Warn extends Command {
+  constructor(client: CustomClient) {
+    super(client, {
+      name: "warn",
+      description: "Warn a user for a specific reason.",
+      category: Category.Moderation,
+      options: [
+        {
+          name: "user",
+          description: "The user to warn.",
+          type: ApplicationCommandOptionType.User,
+          required: true,
+        },
+        {
+          name: "reason",
+          description: "The reason for the warning (predefined options).",
+          type: ApplicationCommandOptionType.String,
+          required: true,
+          choices: client.config.warningReasons.map((r) => ({ name: r, value: r })),
+        },
+        {
+          name: "proof",
+          description: "Proof or additional details for the warning.",
+          type: ApplicationCommandOptionType.String,
+          required: true,
+        },
+      ],
+      default_member_permissions: PermissionFlagsBits.ModerateMembers,
+      dm_permission: false,
+      cooldown: 3,
+    });
+  }
+
+  async Execute(interaction: ChatInputCommandInteraction): Promise<void> {
+    const user = interaction.options.getUser("user", true);
+    const reason = interaction.options.getString("reason", true);
+    const proof = interaction.options.getString("proof", true);
+
+    if (user.id === interaction.user.id) {
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor("Red").setDescription("❌ You cannot warn yourself.")], ephemeral: true });
+      return;
+    }
+
+    const guildId = interaction.guildId!;
+    let doc = await UserModeration.findOne({ userId: user.id, guildId });
+    if (!doc) {
+      doc = new UserModeration({ userId: user.id, guildId, notes: "", warnings: new Map(), punishments: [] });
+    }
+
+    const now = new Date();
+    const existingWarning = doc.warnings.get(reason);
+    if (!existingWarning) {
+      doc.warnings.set(reason, { count: 1, dates: [now], mods: [interaction.user.id] });
+    } else {
+      existingWarning.count++;
+      existingWarning.dates.push(now);
+      existingWarning.mods.push(interaction.user.id);
+      doc.warnings.set(reason, existingWarning);
+    }
+
+    await doc.save();
+
+    // Update profile message if present
+    const { thread, profileMessage } = await getOrCreateThread(this.client, guildId, user.id);
+    if (profileMessage) await profileMessage.edit({ embeds: [buildProfileEmbed(user, doc)] });
+
+    // Thread embed with unix timestamp
+    const unixTimestamp = Math.floor(now.getTime() / 1000);
+    const embed = new EmbedBuilder()
+      .setColor("Yellow")
+      .setTitle("Warning Added")
+      .setDescription(`**Reason:** ${reason}\n**Proof:** ${proof}\n**By:** ${interaction.user.tag}\nAt: <t:${unixTimestamp}:F> (<t:${unixTimestamp}:R>)`)
+
+    await thread.send({ embeds: [embed] });
+
+    // Log to punishment channels (supports array)
+    const logChannelIds = this.client.config.Moderation.Channels?.punishmentLogs;
+    const plainLog = `# ⚠️ **Warning Issued**
+User: ${user.tag} (${user.id})
+By: ${interaction.user.tag}
+Reason: **${reason}**
+Proof: ${proof}
+At: <t:${unixTimestamp}:F>`;
+
+    if (logChannelIds) {
+      if (Array.isArray(logChannelIds)) {
+        for (const channelId of logChannelIds) {
+          try {
+            const ch = await interaction.guild?.channels.fetch(channelId);
+            if (ch?.isTextBased()) await (ch as any).send({ content: plainLog });
+          } catch (e) {
+            console.error(`[WARN LOG] Failed to log warning to ${channelId}:`, e);
+          }
+        }
+      } else {
+        try {
+          const ch = await interaction.guild?.channels.fetch(logChannelIds);
+          if (ch?.isTextBased()) await (ch as any).send({ content: plainLog });
+        } catch (e) {
+          console.error("[WARN LOG] Failed to log warning:", e);
+        }
+      }
+    }
+
+    // DM warned user
+    try {
+      await user.send(`⚠️ You were warned in **${interaction.guild?.name}** for: ${reason}. Proof: ${proof}`);
+    } catch {
+      // ignore DM fail
+    }
+
+    await interaction.reply({ content: `Warned ${user.tag} for "${reason}". Proof: ${proof}`, ephemeral: true });
+  }
+}
+
+    events:
+        client:
+            auto prefix.ts
+                import { Events, GuildMember } from "discord.js";
+import Event from "../../base/classes/Event";
+import CustomClient from "../../base/classes/CustomClient";
+
+export default class GuildMemberUpdateEvent extends Event {
+  constructor(client: CustomClient) {
+    super(client, {
+      name: Events.GuildMemberUpdate,
+      description: "Auto-updates member nicknames based on rank role changes",
+      once: false,
+    });
+  }
+
+  public async Execute(oldMember: GuildMember, newMember: GuildMember) {
+    // Only proceed if roles haven't changed
+    if (
+      oldMember.roles.cache.size === newMember.roles.cache.size &&
+      oldMember.roles.cache.every(r => newMember.roles.cache.has(r.id))
+    ) {
+      return;
+    }
+
+    // Fetch rank configuration
+    const rankOrder: string[] = this.client.config.RankOrder;
+    const rankRoles: Record<string, string> = this.client.config.RankSystem;
+
+    // Identify the member's rank roles
+    const memberRanks = rankOrder.filter(rank => {
+      const roleId = rankRoles[rank];
+      return roleId && newMember.roles.cache.has(roleId);
+    });
+
+    if (!memberRanks.length) {
+      // No rank roles: optionally strip any existing prefix
+      const currentName = newMember.nickname ?? newMember.user.username;
+      const stripped = currentName.replace(/^(?:\[[^\]]+\]\s*|[^|]+\s*\|\s*)/, "");
+      if (currentName !== stripped) {
+        try {
+          await newMember.setNickname(stripped, "Removed outdated rank prefix");
+        } catch (e) {
+          console.error(`Failed to strip prefix for ${newMember.id}:`, e);
+        }
+      }
+      return;
+    }
+
+    // Highest-priority rank (first in config list)
+    const highestRank = memberRanks[0];
+
+    // Strip any existing prefix ([OLD] or OLD | ) to get base name
+    const current = newMember.nickname ?? newMember.user.username;
+    const base = current.replace(/^(?:\[[^\]]+\]\s*|[^|]+\s*\|\s*)/, "");
+
+    // Desired new display
+    const desiredNick = `${highestRank} | ${base}`;
+    if (current === desiredNick) return;
+
+    try {
+      await newMember.setNickname(desiredNick, "Auto-updated rank prefix");
+    } catch (err) {
+      console.error(`Failed to update nickname for ${newMember.id}:`, err);
+    }
+  }
+}
+
+            Ready.ts
+                import Event from "../../base/classes/Event";
+import { Collection, Events, REST, Routes } from "discord.js";
+import CustomClient from "../../base/classes/CustomClient";
+import Command from "../../base/classes/Command";
+
+export default class Ready extends Event {
+    constructor(client: CustomClient) {
+        super(client, {
+            name: Events.ClientReady,
+            description: "Event triggered when the client is ready.",
+            once: true,
+        })
+    }
+
+    async Execute(){
+        console.log(`${this.client.user?.tag} is now ready!`);
+
+        const commands: object[] = this.GetJson(this.client.commands);
+
+        const rest = new REST().setToken(this.client.config.token);
+
+        const setCommands: any = await rest.put(Routes.applicationGuildCommands(this.client.config.clientId, this.client.config.guildId), {
+            body: commands
+        });
+
+        console.log(`Successfully registered ${setCommands.length} application commands.`);
+    }
+
+    private GetJson(commands: Collection<string, Command>): object[] {
+        const data: object[] = [];
+
+        commands.forEach(command => {
+            data.push({
+                name: command.name,
+                description: command.description,
+                options: command.options,
+                default_member_permissions: command.default_member_permissions.toString(),
+                dm_permission: command.dm_permission,
+            })
+        })
+
+        return data;
+    }
+}
+        guild:
+            CommandHandler.ts
+                import { Events, Interaction, CacheType, Collection, EmbedBuilder } from "discord.js";
+import CustomClient from "../../base/classes/CustomClient";
+import Event from "../../base/classes/Event";
+import Command from "../../base/classes/Command";
+
+import { handleModerationButton } from "../../interactions/buttons/moderationButtons";
+import { handleModerationModal } from "../../interactions/modals/moderationModals";
+
+export default class CommandHandler extends Event {
+  constructor(client: CustomClient) {
+    super(client, {
+      name: Events.InteractionCreate,
+      description: "Handles slash commands and moderation actions.",
+      once: false,
+    });
+  }
+
+  async Execute(interaction: Interaction<CacheType>): Promise<void> {
+    // --- Slash commands (your existing code kept here) ---
+    if (interaction.isChatInputCommand()) {
+      const command: Command = this.client.commands.get(interaction.commandName)!;
+
+      if (!command) {
+        await interaction.reply({ content: "Command not found.", ephemeral: true });
+        this.client.commands.delete(interaction.commandName);
+        return;
+      }
+
+      const { cooldowns } = this.client;
+      if (!cooldowns.has(command.name)) cooldowns.set(command.name, new Collection());
+
+      const now = Date.now();
+      const timestamps = cooldowns.get(command.name)!;
+      const cooldownAmount = (command.cooldown || 3) * 1000;
+
+      if (timestamps.has(interaction.user.id) && (now < (timestamps.get(interaction.user.id) || 0) + cooldownAmount)) {
+        await interaction.reply({
+          embeds: [
+            new EmbedBuilder()
+              .setColor("Red")
+              .setDescription(
+                `❌ Please wait another \`${((((timestamps.get(interaction.user.id) || 0) + cooldownAmount) - now) / 1000).toFixed(1)}\` seconds before using \`${command.name}\` again.`
+              ),
+          ],
+          ephemeral: true,
+        });
+        return;
+      }
+
+      timestamps.set(interaction.user.id, now);
+      setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
+
+      try {
+        const subCommandGroup = interaction.options.getSubcommandGroup(false);
+        const subCommand = `${interaction.commandName}${subCommandGroup ? `.${subCommandGroup}` : ""}.${interaction.options.getSubcommand(false) || ""}`;
+        const subCmd = this.client.subCommands.get(subCommand);
+        if (subCmd) {
+          subCmd.Execute(interaction);
+        } else {
+          command.Execute(interaction);
+        }
+      } catch (ex) {
+        console.log(ex);
+      }
+      return;
+    }
+
+    // --- Delegation ---
+    if (interaction.isButton() && interaction.customId.startsWith("mod_")) {
+      return handleModerationButton(this.client, interaction);
+    }
+
+    if (interaction.isModalSubmit() && interaction.customId.startsWith("mod_")) {
+      return handleModerationModal(this.client, interaction);
+    }
+  }
+}
+
+    interactions:
+        buttons:
+            moderationButtons.ts
+                import {
+  ButtonInteraction,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ActionRowBuilder,
+} from "discord.js";
+import CustomClient from "../../base/classes/CustomClient";
+
+export async function handleModerationButton(client: CustomClient, interaction: ButtonInteraction) {
+  const [_, action, userId] = interaction.customId.split("_");
+  const user = await client.users.fetch(userId);
+  const hasDuration = ["mute", "timeout", "ban"].includes(action);
+
+  const modal = new ModalBuilder()
+    .setCustomId(`mod_${action}_${userId}`)
+    .setTitle(`${action.charAt(0).toUpperCase() + action.slice(1)} ${user.username}`);
+
+  const reasonInput = new TextInputBuilder()
+    .setCustomId("reason")
+    .setLabel("Reason")
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(true);
+
+  modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(reasonInput));
+
+  if (hasDuration) {
+    const durationInput = new TextInputBuilder()
+      .setCustomId("duration")
+      .setLabel("Duration (e.g., 1h, 1d, 1 hour)")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(action === "timeout" || action === "mute");
+
+    modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(durationInput));
+  }
+
+  await interaction.showModal(modal);
+}
+
+        modals:
+            ModerationModals.ts
+                import {
+  ModalSubmitInteraction,
+  EmbedBuilder,
+} from "discord.js";
+import CustomClient from "../../base/classes/CustomClient";
+import UserModeration from "../../base/schema/UserModeration";
+import { getOrCreateThread, parseDuration } from "../../utils/moderationUtils";
+
+async function safeRespond(interaction: ModalSubmitInteraction, content: string, ephemeral = true) {
+  try {
+    if (interaction.replied) return interaction.followUp({ content, ephemeral });
+    if (interaction.deferred) return interaction.editReply({ content });
+    return interaction.reply({ content, ephemeral });
+  } catch {
+    // swallow error
+  }
+}
+
+export async function handleModerationModal(client: CustomClient, interaction: ModalSubmitInteraction) {
+  await interaction.deferReply({ ephemeral: true }).catch(() => {});
+
+  const [_, action, userId] = interaction.customId.split("_");
+  let reason: string;
+  try {
+    reason = interaction.fields.getTextInputValue("reason");
+  } catch {
+    await safeRespond(interaction, "Required field `reason` missing.", true);
+    return;
+  }
+
+  let durationStr: string | undefined;
+  try {
+    durationStr = interaction.fields.getTextInputValue("duration") || undefined;
+  } catch {
+    durationStr = undefined;
+  }
+
+  let durationMs: number | null | undefined = undefined;
+  if (durationStr) {
+    durationMs = parseDuration(durationStr);
+    if (durationMs === null) {
+      await safeRespond(interaction, "Invalid duration format.", true);
+      return;
+    }
+  }
+
+  const guild = interaction.guild!;
+  let member;
+  try {
+    member = await guild.members.fetch(userId);
+  } catch {
+    member = undefined;
+  }
+  const user = member?.user || await client.users.fetch(userId);
+
+  let success = false;
+  let errorMsg = "";
+
+  try {
+    switch (action) {
+      case "mute":
+        if (!member || !client.config.muteRoleId) throw new Error("Member not found or mute role missing.");
+        await member.roles.add(client.config.muteRoleId, reason);
+        if (durationMs) {
+          setTimeout(async () => {
+            try {
+              const stillMember = await guild.members.fetch(userId);
+              await stillMember.roles.remove(client.config.muteRoleId, "Mute expired");
+            } catch {}
+          }, durationMs);
+        }
+        success = true;
+        break;
+
+      case "timeout":
+        if (!member) throw new Error("Member not found.");
+        if (!durationMs) throw new Error("Timeout requires a duration.");
+        await member.timeout(durationMs, reason);
+        success = true;
+        break;
+
+      case "kick":
+        if (!member) throw new Error("Member not found.");
+        await member.kick(reason);
+        success = true;
+        break;
+
+      case "ban":
+        await guild.bans.create(userId, { reason });
+        if (durationMs) {
+          setTimeout(async () => {
+            try {
+              await guild.bans.remove(userId, "Ban expired");
+            } catch {}
+          }, durationMs);
+        }
+        success = true;
+        break;
+
+      default:
+        throw new Error(`Unknown action: ${action}`);
+    }
+  } catch (err: any) {
+    errorMsg = err.message ?? String(err);
+  }
+
+  if (!success) {
+    await safeRespond(interaction, `Failed to apply ${action}: ${errorMsg}`, true);
+    return;
+  }
+
+  const now = new Date();
+
+  try {
+    const doc = await UserModeration.findOne({ userId, guildId: guild.id });
+    if (doc) {
+      doc.punishments.push({
+        type: action,
+        reason,
+        duration: durationStr,
+        modId: interaction.user.id,
+        date: now,
+      });
+      await doc.save();
+    }
+  } catch (dbErr) {
+    console.error("[MOD] DB save failed:", dbErr);
+  }
+
+  const unix = Math.floor(now.getTime() / 1000);
+  const { thread } = await getOrCreateThread(client, guild.id, userId);
+  const embed = new EmbedBuilder()
+    .setColor("Red")
+    .setTitle(`${action.toUpperCase()} applied`)
+    .setDescription(
+      `**Reason:** ${reason}\n**Duration:** ${durationStr || "Permanent"}\n**By:** ${interaction.user.tag}\nAt: <t:${unix}:F> (<t:${unix}:R>)`
+    );
+
+  await thread.send({ embeds: [embed] }).catch(() => {});
+
+  await safeRespond(interaction, `${action} applied to ${user.username}.`, true);
+
+  // best effort DM
+  try {
+    await user.send(`You received a **${action.toUpperCase()}** in **${guild.name}** for: ${reason}. Duration: ${durationStr || "Permanent"}`);
+  } catch {}
+}
+
+    utils:
+        ModerationUtils.ts
+            // src/utils/moderationUtils.ts
+import {
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ChannelType,
+    EmbedBuilder,
+    Message,
+    ThreadAutoArchiveDuration,
+    ThreadChannel,
+    User,
+} from "discord.js";
+import CustomClient from "../base/classes/CustomClient";
+import UserModeration, { IUserModeration } from "../base/schema/UserModeration";
+
+export async function getOrCreateThread(
+    client: CustomClient,
+    guildId: string,
+    userId: string
+): Promise<{ thread: ThreadChannel; profileMessage: Message }> {
+    let doc = await UserModeration.findOne({ userId, guildId });
+    if (!doc) {
+        doc = new UserModeration({
+            userId,
+            guildId,
+            notes: "",
+            warnings: new Map(),
+            punishments: [],
+        });
+        await doc.save();
+    }
+
+    const guild = await client.guilds.fetch(guildId);
+    const channel = await guild.channels.fetch(client.config.moderationChannelId);
+    if (!channel) {
+        throw new Error("Moderation channel not found.");
+    }
+
+    if (
+        channel.type !== ChannelType.GuildText &&
+        channel.type !== ChannelType.GuildForum &&
+        channel.type !== ChannelType.GuildMedia
+    ) {
+        throw new Error("Moderation channel must be a text, forum, or media channel.");
+    }
+
+    let thread: ThreadChannel | undefined;
+    if (doc.threadId) {
+        const fetchedThread = await channel.threads.fetch(doc.threadId).catch(() => null);
+        thread = fetchedThread ?? undefined; // Explicitly handle null case
+    }
+
+    if (!thread) {
+        const user = await client.users.fetch(userId);
+        const embed = buildProfileEmbed(user, doc);
+        const components = buildButtons(userId);
+
+        if (channel.type === ChannelType.GuildForum || channel.type === ChannelType.GuildMedia) {
+            // For forum/media channels, create thread with initial message
+            thread = await channel.threads.create({
+                name: `${user.username} (${user.id})`,
+                autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
+                reason: "Moderation form",
+                message: {
+                    embeds: [embed],
+                    components: [components],
+                },
+            });
+            // The initial message is the last (and first) message in the thread
+            await thread.fetchStarterMessage(); // Ensure starter message is cached
+            const profileMessageId = thread.lastMessageId;
+            if (!profileMessageId) {
+                throw new Error("Failed to retrieve profile message ID.");
+            }
+            doc.profileMessageId = profileMessageId;
+        } else {
+            // For text channels, create thread then send message
+            thread = await channel.threads.create({
+                name: `${user.username} (${user.id})`,
+                autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
+                reason: "Moderation form",
+            });
+            const message = await thread.send({ embeds: [embed], components: [components] });
+            doc.profileMessageId = message.id;
+        }
+
+        doc.threadId = thread.id;
+        await doc.save();
+    }
+
+    const profileMessage = await thread.messages.fetch(doc.profileMessageId!);
+    return { thread, profileMessage };
+}
+
+export function buildProfileEmbed(user: User, doc: IUserModeration): EmbedBuilder {
+    const embed = new EmbedBuilder().setTitle(`${user.username} (${user.id})`).setColor("Blue");
+
+    if (doc.notes) {
+        embed.addFields({ name: "Notes", value: doc.notes, inline: false });
+    }
+
+    let warningsStr = "";
+    for (const [reason, data] of doc.warnings.entries()) {
+        warningsStr += `${data.count}x counts of ${reason}\n`;
+    }
+    if (warningsStr) {
+        embed.addFields({ name: "Warnings", value: warningsStr, inline: false });
+    }
+
+    return embed;
+}
+
+export function buildButtons(userId: string): ActionRowBuilder<ButtonBuilder> {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder().setCustomId(`mod_mute_${userId}`).setLabel("Mute").setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`mod_timeout_${userId}`).setLabel("Timeout").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`mod_kick_${userId}`).setLabel("Kick").setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`mod_ban_${userId}`).setLabel("Ban").setStyle(ButtonStyle.Danger)
+    );
+}
+
+export function parseDuration(str: string): number | null {
+    str = str.trim().toLowerCase().replace(/hours?/, "h").replace(/days?/, "d").replace(/minutes?/, "m").replace(/seconds?/, "s").replace(/weeks?/, "w").replace(/years?/, "y");
+
+    const match = str.match(/^(\d+)\s*([smhdwy])?$/);
+    if (!match) return null;
+
+    const num = parseInt(match[1]);
+    let mult = 1000; // default seconds
+    switch (match[2]) {
+        case "s":
+            mult = 1000;
+            break;
+        case "m":
+            mult = 60 * 1000;
+            break;
+        case "h":
+            mult = 60 * 60 * 1000;
+            break;
+        case "d":
+            mult = 24 * 60 * 60 * 1000;
+            break;
+        case "w":
+            mult = 7 * 24 * 60 * 60 * 1000;
+            break;
+        case "y":
+            mult = 365 * 24 * 60 * 60 * 1000;
+            break;
+    }
+    return num * mult;
+}
