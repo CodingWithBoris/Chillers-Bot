@@ -1,4 +1,4 @@
-# Discord Moderation Bot
+# Discord General Bot
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license) [![Node](https://img.shields.io/badge/node-v18%2B-brightgreen.svg)](#requirements) [![Discord.js](https://img.shields.io/badge/discord.js-v14-blue)](#requirements)
 
