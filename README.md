@@ -1,8 +1,21 @@
-# Discord General Bot
+<h1 align="center">Discord General Bot</h1>
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license) [![Node](https://img.shields.io/badge/node-v18%2B-brightgreen.svg)](#requirements) [![Discord.js](https://img.shields.io/badge/discord.js-v14-blue)](#requirements)
+<p align="center">
+  <a href="#license">
+    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License">
+  </a>
+  <a href="#requirements">
+    <img src="https://img.shields.io/badge/node-v18%2B-brightgreen.svg" alt="Node">
+  </a>
+  <a href="#requirements">
+    <img src="https://img.shields.io/badge/discord.js-v14-blue" alt="Discord.js">
+  </a>
+</p>
 
-> A clean, modular, TypeScript-based Discord moderation bot built for reliability and clarity. Designed around slash commands, thread-based moderation logs, and a robust MongoDB-backed user moderation schema.
+<p align="center">
+  A clean, modular, TypeScript-based Discord moderation bot built for reliability and clarity.  
+  Designed around slash commands, thread-based moderation logs, and a robust MongoDB-backed user moderation schema.
+</p>
 
 ---
 
@@ -21,17 +34,19 @@ This project provides a modern starting point for a moderation-focused Discord b
 ## 📁 Repository structure
 
 ```
+
 data/
-  └─ config.json         # runtime configuration (token, IDs, settings)
+└─ config.json         # runtime configuration (token, IDs, settings)
 src/
-  ├─ base/               # core classes, interfaces, enums and schemas
-  ├─ commands/           # slash commands grouped by category
-  ├─ events/             # client event handlers (Ready, InteractionCreate, ...)
-  ├─ interactions/       # buttons & modals handlers
-  └─ utils/              # helper functions (moderation utilities)
+├─ base/               # core classes, interfaces, enums and schemas
+├─ commands/           # slash commands grouped by category
+├─ events/             # client event handlers (Ready, InteractionCreate, ...)
+├─ interactions/       # buttons & modals handlers
+└─ utils/              # helper functions (moderation utilities)
 build/                   # compiled JS output (gitignored)
 README.md
-```
+
+````
 
 ---
 
@@ -84,7 +99,7 @@ Recommended intents in `CustomClient`:
     }
   }
 }
-```
+````
 
 ---
 
@@ -171,4 +186,4 @@ If you'd like additional features (role-based escalation, automatic punishment t
 
 ---
 
-*Made with ❤️ and TypeScript.*
+<p align="center"><i>Made with ❤️ and TypeScript.</i></p>
