@@ -1,6 +1,7 @@
-# Discord General Bot
+| # General Discord Bot |
+|:---------------------:|
+| [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license) [![Node](https://img.shields.io/badge/node-v18%2B-brightgreen.svg)](#requirements) [![Discord.js](https://img.shields.io/badge/discord.js-v14-blue)](#requirements) |
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license) [![Node](https://img.shields.io/badge/node-v18%2B-brightgreen.svg)](#requirements) [![Discord.js](https://img.shields.io/badge/discord.js-v14-blue)](#requirements)
 
 > A clean, modular, TypeScript-based Discord moderation bot built for reliability and clarity. Designed around slash commands, thread-based moderation logs, and a robust MongoDB-backed user moderation schema.
 
