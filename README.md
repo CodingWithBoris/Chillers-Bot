@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 <h1 align="center">Discord General Bot</h1>
 
 <p align="center">
@@ -12,13 +11,6 @@
     <img src="https://img.shields.io/badge/discord.js-v14-blue" alt="Discord.js">
   </a>
 </p>
-=======
-| # General Discord Bot |
-|:---------------------:|
-| [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license) [![Node](https://img.shields.io/badge/node-v18%2B-brightgreen.svg)](#requirements) [![Discord.js](https://img.shields.io/badge/discord.js-v14-blue)](#requirements) |
-
->>>>>>> 3d8c8a7338e3b76f644ec10f33c9c9a13ee9a8dc
-
 <p align="center">
   A clean, modular, TypeScript-based Discord moderation bot built for reliability and clarity.  
   Designed around slash commands, thread-based moderation logs, and a robust MongoDB-backed user moderation schema.
