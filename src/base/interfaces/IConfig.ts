@@ -2,6 +2,11 @@ export default interface IConfig {
   token: string;
   clientId: string;
   guildId: string;
+  VRCHAT_USERNAME : string;
+  VRCHAT_PASSWORD : string;
+  VRCHAT_2FA_SECRET : string;
+  AUTH_COOKIE: string;
+  TWOFA_COOKIE: string;
 
   mongoURI: string;
   moderationChannelId: string;
@@ -10,6 +15,9 @@ export default interface IConfig {
 
   RankOrder: string[];
   RankSystem: Record<string, string>;
+  VerifiedRoleId: string;
+  MemberRoleId: string;
+  UnverifiedRoleId: string;
 
   Departments: {
     // top-level department role ids

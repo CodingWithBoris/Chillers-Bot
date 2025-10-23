@@ -4,7 +4,7 @@ import {
 } from "discord.js";
 import CustomClient from "../../base/classes/CustomClient";
 import UserModeration from "../../base/schema/UserModeration";
-import { getOrCreateThread, parseDuration } from "../../utils/moderationUtils";
+import { getOrCreateThread, parseDuration, buildProfileEmbed } from "../../utils/moderationUtils"; // ✅ added buildProfileEmbed
 
 async function safeRespond(interaction: ModalSubmitInteraction, content: string, ephemeral = true) {
   try {
@@ -51,7 +51,7 @@ export async function handleModerationModal(client: CustomClient, interaction: M
   } catch {
     member = undefined;
   }
-  const user = member?.user || await client.users.fetch(userId);
+  const user = member?.user || (await client.users.fetch(userId));
 
   let success = false;
   let errorMsg = "";
@@ -59,7 +59,8 @@ export async function handleModerationModal(client: CustomClient, interaction: M
   try {
     switch (action) {
       case "mute":
-        if (!member || !client.config.muteRoleId) throw new Error("Member not found or mute role missing.");
+        if (!member || !client.config.muteRoleId)
+          throw new Error("Member not found or mute role missing.");
         await member.roles.add(client.config.muteRoleId, reason);
         if (durationMs) {
           setTimeout(async () => {
@@ -122,11 +123,21 @@ export async function handleModerationModal(client: CustomClient, interaction: M
         date: now,
       });
       await doc.save();
+
+      // ✅ Update the moderation profile embed after saving
+      try {
+        const { profileMessage } = await getOrCreateThread(client, guild.id, userId);
+        const updatedEmbed = buildProfileEmbed(user, doc);
+        await profileMessage.edit({ embeds: [updatedEmbed] });
+      } catch (updateErr) {
+        console.error(`[MOD] Failed to update moderation embed for ${userId}:`, updateErr);
+      }
     }
   } catch (dbErr) {
     console.error("[MOD] DB save failed:", dbErr);
   }
 
+  // Log moderation action to thread
   const unix = Math.floor(now.getTime() / 1000);
   const { thread } = await getOrCreateThread(client, guild.id, userId);
   const embed = new EmbedBuilder()
@@ -140,8 +151,10 @@ export async function handleModerationModal(client: CustomClient, interaction: M
 
   await safeRespond(interaction, `${action} applied to ${user.username}.`, true);
 
-  // best effort DM
+  // Best-effort DM to the user
   try {
-    await user.send(`You received a **${action.toUpperCase()}** in **${guild.name}** for: ${reason}. Duration: ${durationStr || "Permanent"}`);
+    await user.send(
+      `You received a **${action.toUpperCase()}** in **${guild.name}** for: ${reason}. Duration: ${durationStr || "Permanent"}`
+    );
   } catch {}
 }

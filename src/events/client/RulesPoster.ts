@@ -43,22 +43,15 @@ export default class RulesPoster extends Event {
       const textChan = chan as TextChannel;
 
       // Avoid reposting if a rules container is already present
-      const recent = await textChan.messages.fetch({ limit: 100 }).catch(() => null);
-      if (recent && recent.size) {
-        for (const m of recent.values()) {
-          if (!m.components || m.components.length === 0) continue;
-          const hasRules = m.components.some(row =>
-            // @ts-ignore runtime components check
-            (row.components as any[]).some(c => typeof c?.customId === "string" && c.customId === "server_rules_panel")
-          );
-          if (hasRules) {
-            console.log("[RulesPoster] Found existing rules panel in rules channel — not reposting.");
+        // Only post if the channel is empty
+        const lastMsg = await textChan.messages.fetch({ limit: 1 }).catch(() => null);
+        if (lastMsg && lastMsg.size > 0) {
+            console.log("[RulesPoster] Channel not empty — skipping rules post.");
             return;
-          }
         }
-      }
 
-      // Build text displays (concise rules)
+
+        // Build text displays (concise rules)
       const title = new TextDisplayBuilder().setContent("# [Server Rules](https://docs.google.com/document/d/1nNJxoza8MnsThUwEbrQ7-U8kFhKJ4Njucsu6KjMMi7s/edit?usp=sharing) — 18+ Only");
 
       const rulesText1 = new TextDisplayBuilder().setContent(

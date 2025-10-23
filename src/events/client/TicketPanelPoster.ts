@@ -43,23 +43,15 @@ export default class TicketPanelPoster extends Event {
       const textChan = chan as TextChannel;
 
       // Look through recent messages for an existing ticket_select component
-      const recent = await textChan.messages.fetch({ limit: 100 }).catch(() => null);
-      if (recent && recent.size) {
-        for (const m of recent.values()) {
-          if (!m.components || m.components.length === 0) continue;
-          // Inspect each row and each component for customId "ticket_select"
-          const hasTicketSelect = m.components.some(row =>
-            // @ts-ignore - components types in runtime
-            (row.components as any[]).some(c => c?.customId === "ticket_select")
-          );
-          if (hasTicketSelect) {
-            console.log("[TicketPanelPoster] Found existing ticket panel in support channel — not reposting.");
+        // Only post if the channel is empty
+        const lastMsg = await textChan.messages.fetch({ limit: 1 }).catch(() => null);
+        if (lastMsg && lastMsg.size > 0) {
+            console.log("[TicketPanelPoster] Channel not empty — skipping ticket panel post.");
             return;
-          }
         }
-      }
 
-      // Build the ticket select menu
+
+        // Build the ticket select menu
       const select = new StringSelectMenuBuilder()
         .setCustomId("ticket_select")
         .setPlaceholder("Select a reason to open a ticket")

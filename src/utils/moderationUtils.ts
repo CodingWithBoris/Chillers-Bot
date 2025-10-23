@@ -106,6 +106,16 @@ export function buildProfileEmbed(user: User, doc: IUserModeration): EmbedBuilde
     if (warningsStr) {
         embed.addFields({ name: "Warnings", value: warningsStr, inline: false });
     }
+    let punishmentsStr = "";
+    for (const [_key, punishment] of doc.punishments.entries()) {
+        const type = (punishment as any).type ?? "unknown";
+        const duration = (punishment as any).duration ?? "";
+        const reason = (punishment as any).reason ?? "no reason";
+        punishmentsStr += `${duration} ${type} for ${reason}.\n`;
+    }
+    if (punishmentsStr) {
+        embed.addFields({ name: "Punishments", value: punishmentsStr, inline: false });
+    }
 
     return embed;
 }
