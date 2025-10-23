@@ -33,7 +33,7 @@ export default class Kick extends Command {
                     required: false,
                 }
             ],
-            default_member_permissions: PermissionFlagsBits.KickMembers,
+            default_member_permissions: PermissionFlagsBits.BanMembers,
             dm_permission: false,
             cooldown: 0
         });
