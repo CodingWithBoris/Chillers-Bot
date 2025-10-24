@@ -17,4 +17,4 @@ const VerifiedUserSchema = new Schema<IVerifiedUser>({
   verifiedAt: { type: Date, default: Date.now },
 });
 
-export default model<IVerifiedUser>("VerifiedUser1", VerifiedUserSchema);
+export default model<IVerifiedUser>("VerifiedUser", VerifiedUserSchema);
