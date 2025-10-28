@@ -2,6 +2,7 @@ export default interface IConfig {
   token: string;
   clientId: string;
   guildId: string;
+  VRChat_Group_ID: string
   VRCHAT_USERNAME : string;
   VRCHAT_PASSWORD : string;
   VRCHAT_2FA_SECRET : string;
@@ -28,6 +29,8 @@ export default interface IConfig {
     Channels: {
       internalCase: string;
       punishmentLogs: string | string[];
+      instanceLogs : string;
+      moderatorLogs : string;
     };
   };
 
